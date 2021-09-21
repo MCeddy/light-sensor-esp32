@@ -9,13 +9,14 @@
 
 #include "config.h"
 
-extern "C"
-{
-#include "freertos/FreeRTOS.h"
-#include "freertos/timers.h"
-}
-
-#define Sprintf(f, ...) ({ char* s; asprintf(&s, f, __VA_ARGS__); String r = s; free(s); r; })
+#define Sprintf(f, ...) (             \
+    {                                 \
+        char *s;                      \
+        asprintf(&s, f, __VA_ARGS__); \
+        String r = s;                 \
+        free(s);                      \
+        r;                            \
+    })
 #define DEVICE_ID (Sprintf("%06" PRIx64, ESP.getEfuseMac() >> 24)) // unique device ID
 #define uS_TO_S_FACTOR 1000000                                     // Conversion factor for micro seconds to seconds
 
@@ -121,7 +122,13 @@ void sendInfo()
 {
     DynamicJsonDocument doc(1024);
     doc["version"] = version;
-    doc["light"] = lightMeter.readLightLevel();
+
+    float lightLevel = lightMeter.readLightLevel();
+
+    if (lightLevel >= 0)
+    {
+        doc["light"] = lightLevel;
+    }
 
     JsonObject system = doc.createNestedObject("system");
     system["deviceId"] = DEVICE_ID;
@@ -273,57 +280,61 @@ void setupOTA()
     ArduinoOTA
         .setHostname(WiFiSettings.hostname.c_str())
         .setPassword(WiFiSettings.password.c_str())
-        .onStart([]() {
-            isUpdating = true;
+        .onStart([]()
+                 {
+                     isUpdating = true;
 
-            String type;
+                     String type;
 
-            if (ArduinoOTA.getCommand() == U_FLASH)
-            {
-                type = "sketch";
-            }
-            else
-            { // U_FS
-                type = "filesystem";
-            }
+                     if (ArduinoOTA.getCommand() == U_FLASH)
+                     {
+                         type = "sketch";
+                     }
+                     else
+                     { // U_FS
+                         type = "filesystem";
+                     }
 
-            // NOTE: if updating FS this would be the place to unmount FS using FS.end()
-            Serial.println("Start updating " + type);
-        })
-        .onEnd([]() {
-            Serial.println("\nEnd");
+                     // NOTE: if updating FS this would be the place to unmount FS using FS.end()
+                     Serial.println("Start updating " + type);
+                 })
+        .onEnd([]()
+               {
+                   Serial.println("\nEnd");
 
-            isUpdating = false;
-        })
-        .onProgress([](unsigned int progress, unsigned int total) {
-            unsigned int percentValue = progress / (total / 100);
+                   isUpdating = false;
+               })
+        .onProgress([](unsigned int progress, unsigned int total)
+                    {
+                        unsigned int percentValue = progress / (total / 100);
 
-            Serial.printf("Progress: %u%%\r", percentValue);
-        })
-        .onError([](ota_error_t error) {
-            Serial.printf("Error[%u]: ", error);
+                        Serial.printf("Progress: %u%%\r", percentValue);
+                    })
+        .onError([](ota_error_t error)
+                 {
+                     Serial.printf("Error[%u]: ", error);
 
-            if (error == OTA_AUTH_ERROR)
-            {
-                Serial.println("Auth Failed");
-            }
-            else if (error == OTA_BEGIN_ERROR)
-            {
-                Serial.println("Begin Failed");
-            }
-            else if (error == OTA_CONNECT_ERROR)
-            {
-                Serial.println("Connect Failed");
-            }
-            else if (error == OTA_RECEIVE_ERROR)
-            {
-                Serial.println("Receive Failed");
-            }
-            else if (error == OTA_END_ERROR)
-            {
-                Serial.println("End Failed");
-            }
-        })
+                     if (error == OTA_AUTH_ERROR)
+                     {
+                         Serial.println("Auth Failed");
+                     }
+                     else if (error == OTA_BEGIN_ERROR)
+                     {
+                         Serial.println("Begin Failed");
+                     }
+                     else if (error == OTA_CONNECT_ERROR)
+                     {
+                         Serial.println("Connect Failed");
+                     }
+                     else if (error == OTA_RECEIVE_ERROR)
+                     {
+                         Serial.println("Receive Failed");
+                     }
+                     else if (error == OTA_END_ERROR)
+                     {
+                         Serial.println("End Failed");
+                     }
+                 })
         .begin();
 }
 
@@ -380,18 +391,21 @@ void setup()
     WiFiSettings.password = PASSWORD;
 
     // Set callbacks to start OTA when the portal is active
-    WiFiSettings.onPortal = []() {
+    WiFiSettings.onPortal = []()
+    {
         isPortalActive = true;
 
         Serial.println("WiFi config portal active");
 
         setupOTA();
     };
-    WiFiSettings.onPortalWaitLoop = []() {
+    WiFiSettings.onPortalWaitLoop = []()
+    {
         ArduinoOTA.handle();
     };
 
-    WiFiSettings.onConfigSaved = []() {
+    WiFiSettings.onConfigSaved = []()
+    {
         ESP.restart();
     };
 
@@ -430,7 +444,7 @@ void loop()
     {
         if (isWifiConnected && isMqttConnected)
         {
-            if (lastInfoSend == 0 || millis() - lastInfoSend >= 45000) // every 45 seconds
+            if (lastInfoSend == 0 || millis() - lastInfoSend >= UPDATE_INTERVAL)
             {
                 sendInfo(); // TODO move to async timer
             }
