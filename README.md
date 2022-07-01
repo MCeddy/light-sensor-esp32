@@ -1,5 +1,7 @@
 # Light Sensor with ESP32
 
+> :warning: **Archived**: because you can easily use [ESPHome](https://esphome.io/) for that!
+
 ## Description
 
 Messasure light and pushes values to MQTT broker.
